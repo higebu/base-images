@@ -1,0 +1,74 @@
+#!/bin/bash
+
+url=https://github.com/fedora-cloud/docker-brew-fedora/blob/b252b53a976a0e908805d59fb7250e8d5072f4e8/fedora-21-release.tar.xz?raw=true
+
+tmpdir=$(mktemp -d)
+
+IMAGEDIR=$tmpdir/fedora/rootfs
+
+wget $url -O $tmpdir/root.tar.gz
+mkdir -p $IMAGEDIR
+pushd $IMAGEDIR
+tar xf $tmpdir/root.tar.gz
+popd
+
+sudo cp base.sh $IMAGEDIR/script.sh
+sudo systemd-nspawn -D $IMAGEDIR chmod +x /script.sh
+sudo systemd-nspawn -D $IMAGEDIR /script.sh
+sudo systemd-nspawn -D $IMAGEDIR rm -f /script.sh
+
+# Generate manifest
+actool_version=$(actool version | awk '{print $3}')
+cat <<EOF > $tmpdir/fedora/manifest
+{
+    "acKind": "ImageManifest",
+    "acVersion": "${actool_version}",
+    "name": "higebu/fedora",
+    "labels": [
+        {
+            "name": "version",
+            "value": "21.0.0"
+        },
+        {
+            "name": "arch",
+            "value": "amd64"
+        },
+        {
+            "name": "os",
+            "value": "linux"
+        }
+    ],
+    "app": {
+        "exec": [
+            "/usr/sbin/sshd",
+            "-D"
+        ],
+        "group": "0",
+        "user": "0",
+        "ports": [
+            {
+                "name": "ssh",
+                "port": 22,
+                "protocol": "tcp"
+            }
+        ]
+    },
+    "annotations": [
+        {
+            "name": "authors",
+            "value": "Yuya Kusakabe <yuya.kusakabe@gmail.com>"
+        }
+    ]
+}
+EOF
+
+# Build ACI
+sudo actool build -overwrite=true $tmpdir/fedora/ $tmpdir/fedora.aci
+
+# Fetch ACI
+#sudo rkt --insecure-skip-verify=true fetch $tmpdir/fedora.aci
+
+cp -p $tmpdir/fedora.aci .
+
+# Clean up
+sudo rm -rf $tmpdir
