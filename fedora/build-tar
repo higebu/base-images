@@ -1,0 +1,28 @@
+#!/bin/bash
+
+url=https://github.com/fedora-cloud/docker-brew-fedora/blob/b252b53a976a0e908805d59fb7250e8d5072f4e8/fedora-21-release.tar.xz?raw=true
+
+tmpdir=$(mktemp -d)
+
+IMAGEDIR=$tmpdir/fedora/rootfs
+
+wget $url -O $tmpdir/root.tar.gz
+mkdir -p $IMAGEDIR
+pushd $IMAGEDIR
+tar xf $tmpdir/root.tar.gz
+popd
+
+sudo cp base.sh $IMAGEDIR/script.sh
+sudo systemd-nspawn -D $IMAGEDIR chmod +x /script.sh
+sudo systemd-nspawn -D $IMAGEDIR /script.sh
+sudo systemd-nspawn -D $IMAGEDIR rm -f /script.sh
+
+# Build tar
+pushd $IMAGEDIR
+sudo tar Jcf $tmpdir/fedora.tar.xz .
+popd
+
+cp -p $tmpdir/fedora.tar.xz .
+
+# Clean up
+sudo rm -rf $tmpdir
